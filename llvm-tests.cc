@@ -111,47 +111,51 @@ TEST_CASE("compiling and calling a function") {
   InitializeNativeTargetAsmParser();
   InitializeNativeTargetDisassembler();
   LLVMContext ctx;
-  MemoryBufferRef buf(add_src, "add");
-  SMDiagnostic err;
-  auto mod = parseIR(buf, err, ctx);
-  REQUIRE(mod.get() != nullptr);
-  REQUIRE(err.getMessage() == "");
-  auto addFn = mod->getFunction("add");
-  REQUIRE(addFn->arg_size() == 2);
+  auto mod = std::make_unique<Module>("main", ctx);
   EngineBuilder builder(std::move(mod));
   std::string ErrorMsg;
   builder.setErrorStr(&ErrorMsg);
   builder.setEngineKind(EngineKind::JIT);
   builder.setVerifyModules(true);
   builder.setOptLevel(CodeGenOpt::Default);
-  std::unique_ptr<ExecutionEngine> ee(builder.create());
+  auto ee = builder.create();
   REQUIRE(ee);
-  typedef int (*AddFn)(int, int);
-  auto add = (AddFn) ee->getFunctionAddress("add");
-  REQUIRE(add != nullptr);
-  int result = add(3, 2);
-  CHECK(result == 5);
-  SUBCASE("adding and calling another function") {
-    MemoryBufferRef buf_mul(mul_src, "mul");
-    SMDiagnostic err;
-    auto mod_mul = parseIR(buf_mul, err, ctx);
-    ee->addModule(std::move(mod_mul));
-    typedef int (*MulFn)(int, int);
-    auto mul = (MulFn) ee->getFunctionAddress("mul");
-    REQUIRE(mul != nullptr);
-    int result = mul(3, 2);
-    CHECK(result == 6);
-  }
-  SUBCASE("loading a shared library and calling a function in it") {
-    REQUIRE(!sys::DynamicLibrary::LoadLibraryPermanently("/usr/lib/libSDL2.so"));
-    MemoryBufferRef buf(get_sdl_major_version_src, "get_sdl_major_version");
+  SUBCASE("adding and calling a function") {
+    MemoryBufferRef buf(add_src, "add");
     SMDiagnostic err;
     auto mod = parseIR(buf, err, ctx);
+    REQUIRE(mod.get() != nullptr);
+    REQUIRE(err.getMessage() == "");
+    auto addFn = mod->getFunction("add");
+    REQUIRE(addFn->arg_size() == 2);
     ee->addModule(std::move(mod));
-    typedef int (*get_sdl_major_version_func)();
-    auto get_sdl_major_version = (get_sdl_major_version_func) ee->getFunctionAddress("get_sdl_major_version");
-    REQUIRE(get_sdl_major_version != nullptr);
-    int result = get_sdl_major_version();
-    CHECK(result == 2);
+    typedef int (*AddFn)(int, int);
+    auto add = (AddFn) ee->getFunctionAddress("add");
+    REQUIRE(add != nullptr);
+    int result = add(3, 2);
+    CHECK(result == 5);
+    SUBCASE("adding and calling another function") {
+      MemoryBufferRef buf(mul_src, "mul");
+      SMDiagnostic err;
+      auto mod = parseIR(buf, err, ctx);
+      ee->addModule(std::move(mod));
+      typedef int (*MulFn)(int, int);
+      auto mul = (MulFn) ee->getFunctionAddress("mul");
+      REQUIRE(mul != nullptr);
+      int result = mul(3, 2);
+      CHECK(result == 6);
+    }
+    SUBCASE("loading a shared library and calling a function in it") {
+      REQUIRE(!sys::DynamicLibrary::LoadLibraryPermanently("/usr/lib/libSDL2.so"));
+      MemoryBufferRef buf(get_sdl_major_version_src, "get_sdl_major_version");
+      SMDiagnostic err;
+      auto mod = parseIR(buf, err, ctx);
+      ee->addModule(std::move(mod));
+      typedef int (*get_sdl_major_version_func)();
+      auto get_sdl_major_version = (get_sdl_major_version_func) ee->getFunctionAddress("get_sdl_major_version");
+      REQUIRE(get_sdl_major_version != nullptr);
+      int result = get_sdl_major_version();
+      CHECK(result == 2);
+    }
   }
 }
