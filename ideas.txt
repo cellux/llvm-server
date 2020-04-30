@@ -1,0 +1,123 @@
+# Architecture
+
+Clients connect over TCP.
+
+For each accepted client connection, the server forks itself and goes through the following initialization steps:
+
+1. call InitializeNativeTarget() and friends
+2. create LLVMContext
+3. create ExecutionEngine
+
+After initialization, the child goes into a processing loop:
+
+1. read client command
+2. execute client command
+3. send response
+4. goto 1
+
+## Client commands
+
+Implemented via simple line protocol.
+
+Each request is a single line of text, terminated by ASCII LF,
+optionally followed by a command-specific payload whose size is
+specified by the command.
+
+Success response:
+
+```
+OK <size>
+<size> bytes of additional information
+```
+
+Error response:
+
+```
+ERROR <size>
+<size> bytes of error message
+```
+
+### PARSE
+
+```
+PARSE <size>
+<size> bytes of LLVM assembly
+```
+
+Stack effect: ( -- M )
+
+Parse LLVM assembly of <size> bytes and push the resulting module to
+the module stack.
+
+### SAVE
+
+```
+SAVE <path>
+```
+
+Stack effect: ( M -- M )
+
+Save the module at the top of the module stack to the file at <path>
+in LLVM bitcode format.
+
+### LOAD
+
+```
+LOAD <path>
+```
+
+Stack effect: ( -- M )
+
+Load the bitcode module at <path> and push the resulting module to the
+module stack.
+
+### LINK
+
+```
+LINK
+```
+
+Stack effect: ( M1 M2 -- M1+M2 )
+
+Link M2 into M1 and replace the top two stack items with the resulting
+module.
+
+### COMMIT
+
+```
+COMMIT
+```
+
+Stack effect: ( M -- )
+
+Add the module at the top of the stack to the execution engine and
+remove it from the stack.
+
+### CALL
+
+```
+CALL <name> <size>
+```
+
+Stack effect: ( -- )
+
+Success response:
+
+1. Look up function `<name>` in the modules previously added
+   to the execution engine and compile it.
+2. Allocate a buffer of <size> bytes
+3. Invoke the function with the following signature:
+   void (*fn)(void *buf)
+   where buf points to the allocated buffer
+4. Return the contents of buffer in the response
+5. Free buffer
+
+### IMPORT
+
+```
+IMPORT <path>
+```
+
+Stack effect: ( -- )
+
+Import the shared library at <path> into the process.
