@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include <iostream>
+#include <fstream>
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Error.h>
@@ -11,6 +12,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -28,6 +30,8 @@ struct LLVMInitializer {
 };
 
 static LLVMInitializer llvm_init;
+
+using ByteArray = SmallVector<char, 4096>;
 
 class CompileContext {
   LLVMContext ctx;
@@ -49,36 +53,40 @@ public:
     }
   }
 
-  void parse(StringRef code) {
+  void parse(const ByteArray &input) {
+    StringRef code(input.begin(), input.size());
     MemoryBufferRef buf(code, "");
     SMDiagnostic err;
-    auto mod = parseIR(buf, err, ctx);
+    std::unique_ptr<Module> mod = parseIR(buf, err, ctx);
     if (!mod) {
       std::string errmsg;
       raw_string_ostream os(errmsg);
       err.print(nullptr, os, false);
       throw std::runtime_error(os.str());
     }
+    /*
+    std::string errmsg;
+    raw_string_ostream os(errmsg);
+    if (verifyModule(*mod, &os)) {
+      throw std::runtime_error(os.str());
+    }
+    */
     stack.push_back(std::move(mod));
   }
 
-  void save(const std::string &path) {
+  void opt() {
+  }
+
+  ByteArray dump() {
     if (stack.size() < 1) {
       throw new std::runtime_error("module stack underflow");
     }
     auto &mod = stack.back();
     std::error_code ec;
-    raw_fd_ostream out(path, ec);
-    WriteBitcodeToFile(*mod, out);
-  }
-
-  void load(const std::string &path) {
-    SMDiagnostic err;
-    auto mod = parseIRFile(path, err, ctx);
-    if (!mod) {
-      throw std::runtime_error(err.getMessage());
-    }
-    stack.push_back(std::move(mod));
+    ByteArray response;
+    raw_svector_ostream os(response);
+    WriteBitcodeToFile(*mod, os);
+    return std::move(response);
   }
 
   void link() {
@@ -102,14 +110,14 @@ public:
     stack.pop_back();
   }
 
-  std::unique_ptr<uint8_t[]> call(const std::string &funcname, int bufsize) {
+  ByteArray call(const std::string &funcname, int bufsize) {
     typedef void (*Callable)(void*);
     auto f = (Callable) ee->getFunctionAddress(funcname);
     if (!f) {
       throw std::runtime_error("unknown function");
     }
-    auto response = std::make_unique<uint8_t[]>(bufsize);
-    f(response.get());
+    ByteArray response(bufsize);
+    f(response.begin());
     return std::move(response);
   }
 
@@ -143,12 +151,37 @@ static const char *src_add_user =
   "  ret void\n"
   "}\n";
 
+ByteArray from_c_string(const char *str) {
+  return ByteArray(str, str+strlen(str));
+}
+
 TEST_CASE("CompileContext") {
   CompileContext cc;
-  cc.parse(src_add);
-  cc.parse(src_add_user);
+  cc.parse(from_c_string(src_add));
+  cc.parse(from_c_string(src_add_user));
   cc.link();
   cc.commit();
   auto response = cc.call("add_user", 1);
   CHECK(response[0] == 5);
+}
+
+TEST_CASE("dump") {
+  CompileContext cc;
+  cc.parse(from_c_string(src_add));
+  cc.parse(from_c_string(src_add_user));
+  cc.link();
+  auto bitcode = cc.dump();
+  CHECK(bitcode.size() > 0);
+  SUBCASE("commit+call after dump") {
+    cc.commit();
+    auto response = cc.call("add_user", 1);
+    CHECK(response[0] == 5);
+  }
+  SUBCASE("parse into a new context, then commit+call") {
+    CompileContext cc2;
+    cc2.parse(bitcode);
+    cc2.commit();
+    auto response = cc2.call("add_user", 1);
+    CHECK(response[0] == 5);
+  }
 }
