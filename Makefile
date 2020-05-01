@@ -1,12 +1,32 @@
-CXX = g++
-CXXFLAGS = -std=c++14
+CC := clang
+CXX := clang++
+CXXFLAGS := -std=c++14
+OPT := opt
 LDFLAGS := -lLLVM
 
-OBJECTS := \
-	CompileContext.o
+C_SOURCES := $(wildcard *.c)
+CC_SOURCES := $(wildcard *.cc)
+CPP_SOURCES := $(wildcard *.cpp)
 
-testrunner: $(OBJECTS) testrunner.o
+OBJECTS := compiler.o
+
+.PHONY: test
+test: doctest
+	@./doctest
+
+doctest: $(OBJECTS) doctest.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-llvm-tests: llvm-tests.cc
-	$(CXX) $(CXXFLAGS) -o $@ -lLLVM $<
+.PHONY: clean
+clean:
+	rm -f $(basename $(C_SOURCES) $(CC_SOURCES) $(CPP_SOURCES))
+	rm -f *.o
+	rm -f *.ll
+
+%.ll: %.c
+	$(CC) -S -emit-llvm -O0 -o $@ $<
+	$(CC) -o $(basename $@) $@
+
+%.ll: %.cc
+	$(CXX) -S -emit-llvm -O0 -o $@ $<
+	$(CXX) -o $(basename $@) $@
