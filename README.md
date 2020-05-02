@@ -82,7 +82,7 @@ Each session maintains a *module stack* onto which the parsed modules
 are pushed. In the command reference, the stack effect describes how
 the command affects the module stack.
 
-## PARSE
+### PARSE
 
 ```
 PARSE <size>
@@ -94,7 +94,7 @@ Stack effect: ( -- M )
 Parse LLVM assembly (or bitcode) of `<size>` bytes and push the
 resulting module to the module stack.
 
-## DUMP
+### DUMP
 
 ```
 DUMP
@@ -105,7 +105,7 @@ Stack effect: ( M -- M )
 Save the module at the top of the module stack into LLVM bitcode
 format and return the result in the response.
 
-## LINK
+### LINK
 
 ```
 LINK
@@ -116,7 +116,7 @@ Stack effect: ( M1 M2 -- M1+M2 )
 Link M2 into M1 and replace the top two stack items with the resulting
 module.
 
-## COMMIT
+### COMMIT
 
 ```
 COMMIT
@@ -127,7 +127,7 @@ Stack effect: ( M -- )
 Transfer the module at the top of the stack to the execution engine
 and remove it from the stack.
 
-## CALL
+### CALL
 
 ```
 CALL <name> <size>
@@ -144,7 +144,7 @@ Stack effect: ( -- )
 4. Return the contents of buffer in the response
 5. Free buffer
 
-## IMPORT
+### IMPORT
 
 ```
 IMPORT <path>
@@ -154,7 +154,7 @@ Stack effect: ( -- )
 
 Import the shared library at `<path>` into the process.
 
-## QUIT
+### QUIT
 
 ```
 QUIT
