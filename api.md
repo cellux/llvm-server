@@ -101,3 +101,13 @@ IMPORT <path>
 Stack effect: ( -- )
 
 Import the shared library at <path> into the process.
+
+## QUIT
+
+```
+QUIT
+```
+
+Stack effect: ( -- )
+
+Close the LLVM server session.
