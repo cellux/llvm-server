@@ -1,11 +1,12 @@
 #include <string>
 #include <boost/asio.hpp>
 
+using namespace std;
 using namespace boost;
 using boost::asio::ip::tcp;
 
 class LLVMServer {
-  std::string bind_address_;
+  string bind_address_;
   int port_;
   asio::io_context io_context_;
   tcp::acceptor acceptor_;

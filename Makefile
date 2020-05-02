@@ -3,7 +3,7 @@
 CC := clang
 CXX := clang++
 CXXFLAGS := -std=c++14 -DBOOST_ASIO_DISABLE_THREADS
-LDFLAGS := -lLLVM -lpthread
+LDFLAGS := -lLLVM
 
 OBJECTS := compiler.o server.o
 APP_OBJECTS := $(OBJECTS) main.o
@@ -13,6 +13,7 @@ TEST_OBJECTS := \
   doctest.o
 
 compiler.o: compiler.cpp compiler.h
+compiler_test.o: compiler_test.cpp compiler.h
 server.o: server.cpp server.h compiler.h
 main.o: main.cpp server.h
 doctest.o: doctest.cpp doctest.h
@@ -38,6 +39,7 @@ CPP_SOURCES := $(wildcard *.cpp)
 clean:
 	rm -f $(basename $(C_SOURCES) $(CC_SOURCES) $(CPP_SOURCES))
 	rm -f *.o
+	rm -f llvm-server
 
 %.ll: %.c
 	$(CC) -S -emit-llvm -O0 -o $@ $<

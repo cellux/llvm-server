@@ -4,21 +4,26 @@
 #include "server.h"
 #include "compiler.h"
 
+using namespace std;
+
 class LLVMServerSession {
   tcp::socket &socket_;
   CompileContext cc_;
   bool running_;
   ByteArray request_payload_;
 
-  void read_payload(int total_size) {
-    int consumed_size = request_payload_.size();
+  void read_payload(size_t total_size) {
+    size_t consumed_size = request_payload_.size();
     if (request_payload_.capacity() <= total_size) {
-      // reserve an extra byte for terminating zero
+      // ensure there is room for a terminating zero
+      //
+      // contrary to expectations, .resize() changes the capacity of
+      // the vector, not the size
       request_payload_.resize(total_size + 1);
     }
-    request_payload_.set_size(total_size);
-    int remaining_size = total_size - consumed_size;
+    size_t remaining_size = total_size - consumed_size;
     if (remaining_size > 0) {
+      request_payload_.set_size(total_size); // this changes the size
       asio::read(socket_,
                  asio::buffer(request_payload_.begin() + consumed_size,
                               remaining_size),
@@ -27,6 +32,7 @@ class LLVMServerSession {
     // add invisible terminating zero
     // (needed by LLLexer::getNextChar())
     *(request_payload_.begin() + total_size) = 0;
+    // note that .size() does not count the terminating zero
   }
 
   void write_payload(const ByteArray &payload) {
@@ -34,13 +40,13 @@ class LLVMServerSession {
   }
 
   void write_ok_response() {
-    std::string response = "OK 0\n";
+    string response = "OK 0\n";
     asio::write(socket_, asio::buffer(response));
   }
 
   void write_ok_response(const ByteArray &payload) {
-    std::string response = "OK ";
-    response += std::to_string(payload.size());
+    string response = "OK ";
+    response += to_string(payload.size());
     response += "\n";
     asio::write(socket_, asio::buffer(response));
     write_payload(payload);
@@ -48,86 +54,119 @@ class LLVMServerSession {
 
   void write_error_response(const char *error_message) {
     int len = strlen(error_message);
-    std::string response = "ERROR ";
-    response += std::to_string(len);
+    string response = "ERROR ";
+    response += to_string(len);
     response += "\n";
     asio::write(socket_, asio::buffer(response));
-    ByteArray payload(error_message, error_message+len);
-    write_payload(payload);
+    if (len > 0) {
+      ByteArray payload(error_message, error_message + len);
+      if (payload.back() != '\n') {
+        payload.push_back('\n');
+      }
+      write_payload(payload);
+    }
   }
 
-  void process_request(const std::string &first_line) {
-    std::vector<std::string> words;
+  size_t process_request(const string &first_line) {
+    vector<string> words;
     split(words, first_line, is_any_of(" \t"), token_compress_on);
-    std::string command = words[0];
+    string command = words[0];
     to_lower(command);
     if (command == "parse") {
-      int payload_size = stoi(words[1]);
-      std::cerr << "PARSE " << payload_size << std::endl;
+      size_t payload_size = stoi(words[1]);
+      cerr << "PARSE " << payload_size << endl;
       read_payload(payload_size);
       cc_.parse(request_payload_);
       write_ok_response();
+      return payload_size;
     } else if (command == "opt") {
-      std::cerr << "OPT" << std::endl;
+      cerr << "OPT" << endl;
       cc_.opt();
       write_ok_response();
+      return 0;
     }
     else if (command == "dump") {
-      std::cerr << "DUMP" << std::endl;
+      cerr << "DUMP" << endl;
       ByteArray payload = cc_.dump();
       write_ok_response(payload);
+      return 0;
     }
     else if (command == "link") {
-      std::cerr << "LINK" << std::endl;
+      cerr << "LINK" << endl;
       cc_.link();
       write_ok_response();
+      return 0;
     }
     else if (command == "commit") {
-      std::cerr << "COMMIT" << std::endl;
+      cerr << "COMMIT" << endl;
       cc_.commit();
       write_ok_response();
+      return 0;
     }
     else if (command == "call") {
-      std::string funcname = words[1];
-      int bufsize = stoi(words[2]);
-      std::cerr << "CALL " << funcname << " " << bufsize << std::endl;
+      string funcname = words[1];
+      size_t bufsize = stoi(words[2]);
+      cerr << "CALL " << funcname << " " << bufsize << endl;
       ByteArray result = cc_.call(funcname, bufsize);
       write_ok_response(result);
+      return 0;
     }
     else if (command == "import") {
-      std::string path = words[1];
-      std::cerr << "IMPORT " << path << std::endl;
+      string path = words[1];
+      cerr << "IMPORT " << path << endl;
       cc_.import(path);
       write_ok_response();
+      return 0;
     } else if (command == "quit") {
-      std::cerr << "QUIT" << std::endl;
+      cerr << "QUIT" << endl;
+      write_ok_response();
       running_ = false;
+      return 0;
     }
     else {
-      throw std::runtime_error("invalid command");
+      throw std::invalid_argument("invalid command");
     }
   }
 
 public:
   LLVMServerSession(tcp::socket &socket)
-      : socket_(socket),
-        running_(true)
+      : socket_(socket), running_(true)
     {}
 
   int start() {
     while (running_) {
-      std::string s;
+      string s;
       asio::dynamic_string_buffer
-        <char, std::string::traits_type, std::string::allocator_type>
+        <char, string::traits_type, string::allocator_type>
         buf(s);
-      std::size_t bytes_read = asio::read_until(socket_, buf, '\n');
-      std::string first_line = s.substr(0, bytes_read);
-      request_payload_.assign(s.begin()+bytes_read, s.end());
+      size_t bytes_read = asio::read_until(socket_, buf, '\n');
+      // contrary to my expectations, read_until() does not stop
+      // reading when it reaches '\n'
+      //
+      // thus if the request has a payload, the s variable most likely
+      // contains the initial part of it
+      //
+      // to increase confusion, bytes_read is set to the length of the
+      // first line (including the closing delimiter), not the length
+      // of the portion which has been actually read
+      string first_line = s.substr(0, bytes_read);
+      // store the excess part for later processing
+      request_payload_.assign(s.begin() + bytes_read, s.end());
       trim(first_line);
       try {
-        process_request(first_line);
+        size_t consumed_payload_size = process_request(first_line);
+        if (s.size() > (bytes_read + consumed_payload_size)) {
+          // someone sent too much input
+          throw std::runtime_error("protocol violation: excess bytes in the request");
+        }
+      }
+      catch (std::runtime_error &e) {
+        // runtime errors cause the server to exit
+        write_error_response(e.what());
+        break;
       }
       catch (std::exception &e) {
+        // all other errors are just reported to the client
         write_error_response(e.what());
       }
     }
@@ -143,16 +182,18 @@ LLVMServer::LLVMServer(const char *bind_address, int port)
                 port)) {}
 
 int LLVMServer::start() {
-  std::cerr << "llvm-server listening on "
+  cerr << "* llvm-server listening on "
             << bind_address_ << ":" << port_
-            << std::endl;
+            << endl;
   for (;;) {
     tcp::socket socket(io_context_);
     acceptor_.accept(socket);
     if (fork() == 0) {
-      std::cerr << "accepted new connection" << std::endl;
+      cerr << "* accepted new connection" << endl;
       LLVMServerSession session(socket);
-      return session.start();
+      int rv = session.start();
+      cerr << "* connection closed" << endl;
+      return rv;
     }
   }
 }

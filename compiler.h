@@ -6,6 +6,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
+using namespace std;
 using namespace llvm;
 
 using ByteArray = SmallVector<char, 4096>;
@@ -23,7 +24,7 @@ class CompileContext {
   LLVMInitializer init_;
   LLVMContext ctx_;
   std::unique_ptr<ExecutionEngine> ee_;
-  std::vector<std::unique_ptr<Module>> stack_;
+  vector<std::unique_ptr<Module>> stack_;
 
 public:
   CompileContext();
@@ -33,6 +34,6 @@ public:
   ByteArray dump();
   void link();
   void commit();
-  ByteArray call(const std::string &funcname, int bufsize);
-  void import(const std::string &path);
+  ByteArray call(const string &funcname, size_t bufsize);
+  void import(const string &path);
 };

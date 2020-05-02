@@ -18,12 +18,13 @@
 
 #include "compiler.h"
 
+using namespace std;
 using namespace llvm;
 
 CompileContext::CompileContext() {
   auto mod = std::make_unique<Module>("empty", ctx_);
   EngineBuilder builder(std::move(mod));
-  std::string ErrorMsg;
+  string ErrorMsg;
   builder.setErrorStr(&ErrorMsg);
   builder.setEngineKind(EngineKind::JIT);
   builder.setVerifyModules(true);
@@ -40,18 +41,11 @@ void CompileContext::parse(const ByteArray &input) {
   SMDiagnostic err;
   std::unique_ptr<Module> mod = parseIR(buf, err, ctx_);
   if (!mod) {
-    std::string errmsg;
+    string errmsg;
     raw_string_ostream os(errmsg);
     err.print(nullptr, os, false);
-    throw std::runtime_error(os.str());
+    throw std::invalid_argument(os.str());
   }
-  /*
-    std::string errmsg;
-    raw_string_ostream os(errmsg);
-    if (verifyModule(*mod, &os)) {
-      throw std::runtime_error(os.str());
-    }
-    */
   stack_.push_back(std::move(mod));
 }
 
@@ -63,7 +57,6 @@ ByteArray CompileContext::dump() {
     throw std::underflow_error("module stack underflow");
   }
   auto &mod = stack_.back();
-  std::error_code ec;
   ByteArray response;
   raw_svector_ostream os(response);
   WriteBitcodeToFile(*mod, os);
@@ -91,21 +84,21 @@ void CompileContext::commit() {
   stack_.pop_back();
 }
 
-ByteArray CompileContext::call(const std::string &funcname,
-                               int bufsize) {
+ByteArray CompileContext::call(const string &funcname,
+                               size_t bufsize) {
   typedef void (*Callable)(void*);
   auto f = (Callable) ee_->getFunctionAddress(funcname);
   if (!f) {
-    throw std::runtime_error("unknown function");
+    throw std::invalid_argument("unknown function");
   }
   ByteArray response(bufsize);
   f(response.begin());
   return std::move(response);
 }
 
-void CompileContext::import(const std::string &path) {
+void CompileContext::import(const string &path) {
   auto err = sys::DynamicLibrary::LoadLibraryPermanently(path.c_str());
   if (err) {
-    throw std::runtime_error("import error");
+    throw std::invalid_argument("import error");
   }
 }

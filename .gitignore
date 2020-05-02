@@ -1,2 +1,5 @@
 *.o
 *.ll
+doctest
+hello
+llvm-server
