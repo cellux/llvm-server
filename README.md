@@ -14,16 +14,29 @@ low-level programming.
 
 ## How to build and test it
 
+Install dependencies:
+
+- LLVM
+- clang
+- Boost::ASIO
+
+Build:
+
 ```
 make
+```
+
+Build and run all unit tests for the server:
+
+```
 make test
 ```
 
 ## Usage
 
-Start the `llvm-server` binary.
+After a successful build, you shall find a `llvm-server` binary in the working directory. Start it.
 
-Once it is running, you should be able to connect at 127.0.0.1:4000.
+Once it is running, you shall be able to connect to the server at 127.0.0.1:4000.
 
 For each connection, the server forks a subprocess to handle the
 session. As a consequence, there can be several clients at once, each
@@ -33,7 +46,7 @@ working in their own session.
 
 The server implements a simple line-based protocol.
 
-Every client request consists of a single line of text, terminated by
+Each client request consists of a single line of text, terminated by
 ASCII LF, optionally followed by a command-specific payload whose size
 is specified by the command.
 
@@ -66,8 +79,8 @@ FAIL
 ```
 
 Each session maintains a *module stack* onto which the parsed modules
-are pushed. In the command reference, the stack effect section
-describes how the command affects the module stack.
+are pushed. In the command reference, the stack effect describes how
+the command affects the module stack.
 
 ## PARSE
 
