@@ -78,7 +78,7 @@ PARSE <size>
 
 Stack effect: ( -- M )
 
-Parse LLVM assembly (or bitcode) of <size> bytes and push the
+Parse LLVM assembly (or bitcode) of `<size>` bytes and push the
 resulting module to the module stack.
 
 ## DUMP
@@ -89,8 +89,8 @@ DUMP
 
 Stack effect: ( M -- M )
 
-Dump the module at the top of the module stack into LLVM bitcode
-format and return it in the response.
+Save the module at the top of the module stack into LLVM bitcode
+format and return the result in the response.
 
 ## LINK
 
@@ -139,7 +139,7 @@ IMPORT <path>
 
 Stack effect: ( -- )
 
-Import the shared library at <path> into the process.
+Import the shared library at `<path>` into the process.
 
 ## QUIT
 
